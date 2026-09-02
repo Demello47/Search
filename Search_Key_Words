@@ -1,0 +1,503 @@
+import os
+import re
+import sys
+
+
+# ==========================================================
+# ROOT
+# ==========================================================
+
+ROOT_BASE = "."
+
+if len(sys.argv) < 2:
+    print("Usage: python3 search_fails.py FOLDER_NAME")
+    sys.exit(1)
+
+folder_name = sys.argv[1]
+
+ROOT = os.path.join(
+    ROOT_BASE,
+    folder_name
+)
+
+
+# ==========================================================
+# KEYWORDS
+# ==========================================================
+
+KEYWORDS_FILE = "keywords.txt"
+
+with open(
+    KEYWORDS_FILE,
+    "r",
+    encoding="utf-8"
+) as f:
+
+    KEYWORDS = [
+        line.rstrip("\r\n")
+        for line in f
+        if line.rstrip("\r\n") != ""
+    ]
+
+
+# ==========================================================
+# EXCLUDE PHRASES
+# ==========================================================
+
+EXCLUDE_FILE = "exclude.txt"
+
+with open(
+    EXCLUDE_FILE,
+    "r",
+    encoding="utf-8"
+) as f:
+
+    EXCLUDE_PHRASES = [
+        line.rstrip("\r\n")
+        for line in f
+        if line.rstrip("\r\n") != ""
+    ]
+
+
+# ==========================================================
+# OUTPUT
+# ==========================================================
+
+OUTPUT_FILE = os.path.join(
+    ROOT,
+    "search_results.txt"
+)
+
+
+# ==========================================================
+# EXTENSIONS TO SKIP
+# ==========================================================
+
+SKIP_EXTENSIONS = {
+    ".exe",
+    ".dll",
+    ".so",
+    ".sys",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".ico",
+    ".mp3",
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".zip",
+    ".rar",
+    ".7z",
+    ".gz",
+    ".tar",
+    ".iso",
+    ".bin",
+    ".pdf",
+}
+
+
+# ==========================================================
+# FILE NAME PATTERNS TO SKIP
+#
+# Example:
+# something.log.1
+# something.log.17
+# something.log.999
+# ==========================================================
+
+SKIP_FILE_PATTERNS = [
+    r"\.log\.\d+$",
+]
+
+
+# ==========================================================
+# GET TOP DIRECTORY
+# ==========================================================
+
+def get_top_directory(directory):
+
+    relative_path = os.path.relpath(
+        directory,
+        ROOT
+    )
+
+    if relative_path == ".":
+        return "ROOT"
+
+    return relative_path.split(
+        os.sep
+    )[0]
+
+
+# ==========================================================
+# SEARCH ONE FILE
+# ==========================================================
+
+def search_file(file_path):
+
+    found = []
+
+    try:
+
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore"
+        ) as file:
+
+            for line_number, line in enumerate(
+                file,
+                start=1
+            ):
+
+                # ==========================================
+                # EXCLUDES
+                # ==========================================
+
+                if any(
+                    exclude.lower()
+                    in line.lower()
+                    for exclude
+                    in EXCLUDE_PHRASES
+                ):
+                    continue
+
+
+                matched_keywords = []
+
+
+                # ==========================================
+                # KEYWORDS
+                # ==========================================
+
+                for keyword in KEYWORDS:
+
+                    # --------------------------------------
+                    # REGEX MODE
+                    #
+                    # keywords.txt:
+                    #
+                    # regex:dom\d+
+                    # --------------------------------------
+
+                    if keyword.startswith(
+                        "regex:"
+                    ):
+
+                        pattern = keyword[
+                            len("regex:"):
+                        ]
+
+                        try:
+
+                            if re.search(
+                                pattern,
+                                line
+                            ):
+
+                                matched_keywords.append(
+                                    keyword
+                                )
+
+                        except re.error as error:
+
+                            print(
+                                f"Invalid regex: "
+                                f"{keyword}"
+                            )
+
+                            print(
+                                f"Reason: {error}"
+                            )
+
+
+                    # --------------------------------------
+                    # LITERAL MODE
+                    #
+                    # Exact character sequence.
+                    #
+                    # Example keyword:
+                    #
+                    # Test '
+                    #
+                    # Finds:
+                    #
+                    # Test 'SYSTEM:CHECK'
+                    #
+                    # Does NOT find:
+                    #
+                    # Test'
+                    # Test  '
+                    # --------------------------------------
+
+                    else:
+
+                        if keyword in line:
+
+                            matched_keywords.append(
+                                keyword
+                            )
+
+
+                # ==========================================
+                # SAVE MATCH
+                # ==========================================
+
+                if matched_keywords:
+
+                    found.append({
+
+                        "line":
+                            line_number,
+
+                        "keywords":
+                            matched_keywords,
+
+                        "text":
+                            line.rstrip(
+                                "\r\n"
+                            )
+                    })
+
+
+    except (
+        PermissionError,
+        OSError
+    ) as error:
+
+        print(
+            f"Cannot read: "
+            f"{file_path}"
+        )
+
+        print(
+            f"Reason: {error}"
+        )
+
+
+    return found
+
+
+# ==========================================================
+# MAIN
+# ==========================================================
+
+def main():
+
+    # ======================================================
+    # CHECK ROOT
+    # ======================================================
+
+    if not os.path.isdir(
+        ROOT
+    ):
+
+        print(
+            f"ROOT directory "
+            f"not found: {ROOT}"
+        )
+
+        return
+
+
+    # ======================================================
+    # CLEAR OLD OUTPUT
+    # ======================================================
+
+    with open(
+        OUTPUT_FILE,
+        "w",
+        encoding="utf-8"
+    ):
+        pass
+
+
+    # ======================================================
+    # WALK DIRECTORIES
+    # ======================================================
+
+    for (
+        directory,
+        subdirectories,
+        files
+    ) in os.walk(
+        ROOT
+    ):
+
+        for filename in files:
+
+            file_path = os.path.join(
+                directory,
+                filename
+            )
+
+
+            # ==============================================
+            # SKIP OUTPUT FILE ITSELF
+            # ==============================================
+
+            if (
+                os.path.abspath(
+                    file_path
+                )
+                ==
+                os.path.abspath(
+                    OUTPUT_FILE
+                )
+            ):
+                continue
+
+
+            # ==============================================
+            # SKIP FILE NAME PATTERNS
+            # ==============================================
+
+            if any(
+                re.search(
+                    pattern,
+                    filename,
+                    re.IGNORECASE
+                )
+                for pattern
+                in SKIP_FILE_PATTERNS
+            ):
+                continue
+
+
+            # ==============================================
+            # SKIP BINARY EXTENSIONS
+            # ==============================================
+
+            extension = os.path.splitext(
+                filename
+            )[1].lower()
+
+
+            if extension in SKIP_EXTENSIONS:
+                continue
+
+
+            print(
+                f"Scanning: {file_path}",
+                flush=True
+            )
+
+
+            # ==============================================
+            # SEARCH
+            # ==============================================
+
+            found = search_file(
+                file_path
+            )
+
+
+            if not found:
+                continue
+
+
+            # ==============================================
+            # DIRECTORY NAME
+            # ==============================================
+
+            top_directory = (
+                get_top_directory(
+                    directory
+                )
+            )
+
+
+            # ==============================================
+            # WRITE RESULTS
+            # ==============================================
+
+            with open(
+                OUTPUT_FILE,
+                "a",
+                encoding="utf-8"
+            ) as output:
+
+                output.write(
+                    "\n"
+                )
+
+                output.write(
+                    "=" * 80
+                    + "\n"
+                )
+
+                output.write(
+                    f"Directory: "
+                    f"{top_directory}\n"
+                )
+
+                output.write(
+                    f"File:      "
+                    f"{filename}\n"
+                )
+
+                output.write(
+                    f"Full Path: "
+                    f"{file_path}\n"
+                )
+
+                output.write(
+                    "-" * 80
+                    + "\n"
+                )
+
+
+                for match in found:
+
+                    keywords = ", ".join(
+                        match[
+                            "keywords"
+                        ]
+                    )
+
+
+                    output.write(
+
+                        f"[{keywords}] "
+                        f"Line "
+                        f"{match['line']}: "
+                        f"{match['text']}"
+                        f"\n\n"
+                    )
+
+
+    # ======================================================
+    # DONE
+    # ======================================================
+
+    print()
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        "Search completed."
+    )
+
+    print(
+        f"Results saved to: "
+        f"{OUTPUT_FILE}"
+    )
+
+    print(
+        "=" * 60
+    )
+
+
+# ==========================================================
+# START
+# ==========================================================
+
+if __name__ == "__main__":
+    main()
