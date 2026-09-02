@@ -38,13 +38,15 @@ ROOT = os.path.join(
 #
 # regex:dom\d+ #" ",2,4
 #
-# If no # is provided:
-#     output full matching line.
 #
-# If # is provided:
+# No #:
+#     output full matching line
+#
+# With #:
+#
 #     #"separator",column,column,...
 #
-# Column numbering starts from 1 like awk.
+# Column numbering starts from 1 like awk
 # ==========================================================
 
 KEYWORDS_FILE = "keywords.txt"
@@ -70,7 +72,7 @@ with open(
         columns = []
 
         # --------------------------------------------------
-        # Parse optional column settings
+        # Optional column extraction
         # --------------------------------------------------
 
         if "#" in line:
@@ -237,14 +239,29 @@ def split_fields(
         "\r\n"
     )
 
-    # Space behaves similar to awk:
-    # multiple spaces/tabs collapse.
+    # ------------------------------------------------------
+    # Space behaves similar to awk
+    #
+    # Multiple spaces/tabs collapse into one separator
+    # ------------------------------------------------------
+
     if separator == " ":
         return text.split()
 
-    # Allow "\t" in keywords.txt
+    # ------------------------------------------------------
+    # TAB support
+    #
+    # Example in keywords.txt:
+    #
+    # TEST #"\t",2,5
+    # ------------------------------------------------------
+
     if separator == r"\t":
         separator = "\t"
+
+    # ------------------------------------------------------
+    # Literal separator
+    # ------------------------------------------------------
 
     return text.split(
         separator
@@ -270,7 +287,12 @@ def extract_columns(
 
     for column in columns:
 
-        # User column 1 -> Python index 0
+        # User:
+        # column 1
+        #
+        # Python:
+        # index 0
+
         index = column - 1
 
         if 0 <= index < len(fields):
@@ -299,6 +321,10 @@ def keyword_matches(
 
     # ------------------------------------------------------
     # REGEX MODE
+    #
+    # Example:
+    #
+    # regex:dom\d+
     # ------------------------------------------------------
 
     if keyword.startswith(
@@ -333,15 +359,17 @@ def keyword_matches(
     # ------------------------------------------------------
     # LITERAL MODE
     #
-    # Exact sequence of characters.
+    # Exact character sequence
+    #
+    # Example:
     #
     # Test '
     #
-    # finds:
+    # Finds:
     #
     # Test 'SYSTEM:CHECK'
     #
-    # but not:
+    # Does NOT find:
     #
     # Test'
     # Test  '
@@ -414,7 +442,7 @@ def search_file(
                         continue
 
                     # --------------------------------------
-                    # Full line mode
+                    # FULL LINE
                     # --------------------------------------
 
                     if not columns:
@@ -426,7 +454,7 @@ def search_file(
                         })
 
                     # --------------------------------------
-                    # Selected columns mode
+                    # SELECTED COLUMNS
                     # --------------------------------------
 
                     else:
@@ -444,7 +472,7 @@ def search_file(
                         })
 
                 # ==========================================
-                # SAVE MATCHED PHYSICAL LINE
+                # SAVE MATCHED LINE
                 # ==========================================
 
                 if matches:
@@ -533,6 +561,7 @@ def main():
             ):
                 continue
 
+
             # ==============================================
             # SKIP FILE NAME PATTERNS
             # ==============================================
@@ -548,6 +577,7 @@ def main():
             ):
                 continue
 
+
             # ==============================================
             # SKIP BINARY EXTENSIONS
             # ==============================================
@@ -558,6 +588,7 @@ def main():
 
             if extension in SKIP_EXTENSIONS:
                 continue
+
 
             # ==============================================
             # SCAN FILE
@@ -575,9 +606,15 @@ def main():
             if not found:
                 continue
 
+
+            # ==============================================
+            # TOP DIRECTORY
+            # ==============================================
+
             top_directory = get_top_directory(
                 directory
             )
+
 
             # ==============================================
             # WRITE REPORT
@@ -590,19 +627,36 @@ def main():
             ) as output:
 
                 output.write("\n")
-                output.write("=" * 80 + "\n")
+
                 output.write(
-                    f"Directory: {top_directory}\n"
+                    "=" * 80
+                    + "\n"
                 )
+
                 output.write(
-                    f"File:      {filename}\n"
+                    f"Directory: "
+                    f"{top_directory}\n"
                 )
+
                 output.write(
-                    f"Full Path: {file_path}\n"
+                    f"File:      "
+                    f"{filename}\n"
                 )
+
                 output.write(
-                    "-" * 80 + "\n"
+                    f"Full Path: "
+                    f"{file_path}\n"
                 )
+
+                output.write(
+                    "-" * 80
+                    + "\n"
+                )
+
+
+                # ==========================================
+                # WRITE MATCHES
+                # ==========================================
 
                 for match in found:
 
@@ -619,7 +673,12 @@ def main():
                         #
                         # Example:
                         #
-                        # [Test '] Test 'SYSTEM:CHECK'
+                        # [Test '] Line 350:
+                        # Test 'SYSTEM:CHECK'
+                        #
+                        # Actually output is one line:
+                        #
+                        # [Test '] Line 350: Test 'SYSTEM...
                         # ----------------------------------
 
                         if (
@@ -629,6 +688,7 @@ def main():
 
                             output.write(
                                 f"[{keyword}] "
+                                f"Line {match['line']}: "
                                 f"{item['text']}\n"
                             )
 
@@ -637,7 +697,7 @@ def main():
                         #
                         # Example:
                         #
-                        # [TEST_STAGE] VALUE5 VALUE6
+                        # [TEST_STAGE] Line 125: VALUE5 VALUE6
                         # ----------------------------------
 
                         else:
@@ -648,6 +708,7 @@ def main():
 
                             output.write(
                                 f"[{keyword}] "
+                                f"Line {match['line']}: "
                                 f"{selected_text}\n"
                             )
 
@@ -657,13 +718,23 @@ def main():
     # ======================================================
 
     print()
-    print("=" * 60)
-    print("Search completed.")
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        "Search completed."
+    )
+
     print(
         f"Results saved to: "
         f"{OUTPUT_FILE}"
     )
-    print("=" * 60)
+
+    print(
+        "=" * 60
+    )
 
 
 # ==========================================================
